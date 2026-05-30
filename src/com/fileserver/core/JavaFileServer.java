@@ -12,7 +12,7 @@ import java.util.concurrent.Executors;
 import com.fileserver.network.ClientWorker; // Correctly imports standalone worker
 
 public class JavaFileServer {
-    private static final int PORT = 8080;
+    private static final int PORT = 8085;
     private static final String STORAGE_DIR = "./server_storage";
     private static final String AUTH_FILE = "./users.txt";
 

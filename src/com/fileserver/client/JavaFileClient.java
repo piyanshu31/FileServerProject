@@ -32,7 +32,7 @@ public class JavaFileClient {
         int result = JOptionPane.showConfirmDialog(null, panel, "Connect to Sim-NFS Server", JOptionPane.OK_CANCEL_OPTION);
         if (result == JOptionPane.OK_OPTION) {
             try {
-                socket = new Socket(txtHost.getText(), 8080);
+                socket = new Socket(txtHost.getText(), 8085);
                 in = new DataInputStream(socket.getInputStream());
                 out = new DataOutputStream(socket.getOutputStream());
 
