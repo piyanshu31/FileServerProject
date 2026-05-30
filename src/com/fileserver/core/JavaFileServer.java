@@ -1,3 +1,5 @@
+package com.fileserver.core;
+
 import javax.swing.*;
 import java.awt.*;
 import java.io.*;
@@ -7,7 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import com.fileserver.network.ClientWorker;
+import com.fileserver.network.ClientWorker; // Correctly imports standalone worker
 
 public class JavaFileServer {
     private static final int PORT = 8080;
@@ -77,7 +79,8 @@ public class JavaFileServer {
         log("Server logs initialized...");
     }
 
-    private static void log(String message) {
+    // Public method so ClientWorker can write logs back to the Server Console UI
+    public static void log(String message) {
         SwingUtilities.invokeLater(() -> logArea.append(message + "\n"));
         System.out.println(message);
     }
@@ -89,144 +92,13 @@ public class JavaFileServer {
                 while (true) {
                     Socket clientSocket = serverSocket.accept();
                     log("Inbound connection from: " + clientSocket.getRemoteSocketAddress());
+
+                    // Correctly passes the 3 parameters to your standalone ClientWorker file
                     threadPool.execute(new ClientWorker(clientSocket, STORAGE_DIR, userDatabase));
                 }
             } catch (IOException e) {
                 log("Server Socket error: " + e.getMessage());
             }
         }).start();
-    }
-
-    // Worker Thread Handling Protocol Actions
-    private static class ClientWorker implements Runnable {
-        private Socket socket;
-        private DataInputStream in;
-        private DataOutputStream out;
-        private boolean isAuthenticated = false;
-
-        public ClientWorker(Socket socket) {
-            this.socket = socket;
-        }
-
-        @Override
-        public void run() {
-            try {
-                in = new DataInputStream(socket.getInputStream());
-                out = new DataOutputStream(socket.getOutputStream());
-
-                while (true) {
-                    String command = in.readUTF();
-
-                    if (!isAuthenticated && !command.startsWith("AUTH")) {
-                        out.writeUTF("ERROR: Authentication required.");
-                        continue;
-                    }
-
-                    if (command.startsWith("AUTH")) {
-                        handleAuth(command);
-                    } else if (command.equals("LOOKUP")) {
-                        handleLookup();
-                    } else if (command.startsWith("READ")) {
-                        handleRead(command);
-                    } else if (command.startsWith("WRITE")) {
-                        handleWrite(command);
-                    } else if (command.equals("EXIT")) {
-                        out.writeUTF("GOODBYE");
-                        break;
-                    }
-                }
-            } catch (IOException e) {
-                log("Client disconnected abruptly: " + socket.getRemoteSocketAddress());
-            } finally {
-                try {
-                    socket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        private void handleAuth(String command) throws IOException {
-            String[] tokens = command.split(" ");
-            if (tokens.length < 3) {
-                out.writeUTF("AUTH_FAIL");
-                return;
-            }
-            String user = tokens[1];
-            String pass = tokens[2];
-
-            if (userDatabase.containsKey(user) && userDatabase.get(user).equals(pass)) {
-                isAuthenticated = true;
-                out.writeUTF("AUTH_SUCCESS");
-                log("User '" + user + "' successfully authenticated.");
-            } else {
-                out.writeUTF("AUTH_FAIL");
-                log("Failed login attempt for user: " + user);
-            }
-        }
-
-        private void handleLookup() throws IOException {
-            File folder = new File(STORAGE_DIR);
-            File[] listOfFiles = folder.listFiles();
-            StringBuilder fileList = new StringBuilder();
-
-            if (listOfFiles != null) {
-                for (File file : listOfFiles) {
-                    if (file.isFile()) {
-                        fileList.append(file.getName()).append(" (").append(file.length()).append(" bytes),");
-                    }
-                }
-            }
-            if (fileList.length() > 0) {
-                fileList.setLength(fileList.length() - 1); // strip trailing comma
-            } else {
-                fileList.append("No files available.");
-            }
-            out.writeUTF(fileList.toString());
-        }
-
-        private void handleRead(String command) throws IOException {
-            String filename = command.substring(5).trim();
-            File file = new File(STORAGE_DIR, filename);
-
-            // Prevent path traversal exploits
-            if (!file.getParentFile().getCanonicalPath().equals(new File(STORAGE_DIR).getCanonicalPath())) {
-                out.writeLong(-1);
-                return;
-            }
-
-            if (file.exists() && file.isFile()) {
-                out.writeLong(file.length());
-                try (FileInputStream fis = new FileInputStream(file)) {
-                    byte[] buffer = new byte[4096];
-                    int bytesRead;
-                    while ((bytesRead = fis.read(buffer)) != -1) {
-                        out.write(buffer, 0, bytesRead);
-                    }
-                }
-                log("Sent file '" + filename + "' to client.");
-            } else {
-                out.writeLong(-1); // File not found flag
-            }
-        }
-
-        private void handleWrite(String command) throws IOException {
-            String[] tokens = command.split(" ", 3);
-            String filename = tokens[1];
-            long fileSize = Long.parseLong(tokens[2]);
-
-            File file = new File(STORAGE_DIR, filename);
-            try (FileOutputStream fos = new FileOutputStream(file)) {
-                byte[] buffer = new byte[4096];
-                long totalRead = 0;
-                int bytesRead;
-                while (totalRead < fileSize && (bytesRead = in.read(buffer, 0, (int) Math.min(buffer.length, fileSize - totalRead))) != -1) {
-                    fos.write(buffer, 0, bytesRead);
-                    totalRead += bytesRead;
-                }
-            }
-            out.writeUTF("WRITE_SUCCESS");
-            log("Received and saved file '" + filename + "' from client.");
-        }
     }
 }

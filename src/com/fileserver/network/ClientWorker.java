@@ -13,7 +13,7 @@ public class ClientWorker implements Runnable {
     private DataOutputStream out;
     private boolean isAuthenticated = false;
 
-    // Pass the socket, storage path, and user database references from the main server
+    // The Constructor MUST accept all 3 parameters to fix your error
     public ClientWorker(Socket socket, String storageDir, Map<String, String> userDatabase) {
         this.socket = socket;
         this.storageDir = storageDir;
@@ -27,16 +27,13 @@ public class ClientWorker implements Runnable {
             out = new DataOutputStream(socket.getOutputStream());
 
             while (true) {
-                // Read the command string sent by the client
                 String command = in.readUTF();
 
-                // Block actions if the client hasn't logged in yet
                 if (!isAuthenticated && !command.startsWith("AUTH")) {
                     out.writeUTF("ERROR: Authentication required.");
                     continue;
                 }
 
-                // Sim-NFS Protocol Router
                 if (command.startsWith("AUTH")) {
                     handleAuth(command);
                 } else if (command.equals("LOOKUP")) {
@@ -51,7 +48,7 @@ public class ClientWorker implements Runnable {
                 }
             }
         } catch (IOException e) {
-            System.out.println("Client disconnected info: " + socket.getRemoteSocketAddress());
+            System.out.println("Client disconnected: " + socket.getRemoteSocketAddress());
         } finally {
             cleanUp();
         }
@@ -82,16 +79,12 @@ public class ClientWorker implements Runnable {
         if (listOfFiles != null) {
             for (File file : listOfFiles) {
                 if (file.isFile()) {
-                    fileList.append(file.getName())
-                            .append(" (")
-                            .append(file.length())
-                            .append(" bytes),");
+                    fileList.append(file.getName()).append(" (").append(file.length()).append(" bytes),");
                 }
             }
         }
-
         if (fileList.length() > 0) {
-            fileList.setLength(fileList.length() - 1); // Remove trailing comma
+            fileList.setLength(fileList.length() - 1);
         } else {
             fileList.append("No files available.");
         }
@@ -102,14 +95,13 @@ public class ClientWorker implements Runnable {
         String filename = command.substring(5).trim();
         File file = new File(storageDir, filename);
 
-        // Security check: Prevent path traversal exploits (e.g., ../../etc/passwd)
         if (!file.getParentFile().getCanonicalPath().equals(new File(storageDir).getCanonicalPath())) {
             out.writeLong(-1);
             return;
         }
 
         if (file.exists() && file.isFile()) {
-            out.writeLong(file.length()); // Send file size first
+            out.writeLong(file.length());
             try (FileInputStream fis = new FileInputStream(file)) {
                 byte[] buffer = new byte[4096];
                 int bytesRead;
@@ -118,7 +110,7 @@ public class ClientWorker implements Runnable {
                 }
             }
         } else {
-            out.writeLong(-1); // Tell client file doesn't exist
+            out.writeLong(-1);
         }
     }
 
@@ -132,7 +124,6 @@ public class ClientWorker implements Runnable {
             byte[] buffer = new byte[4096];
             long totalRead = 0;
             int bytesRead;
-            // Stream the exact file byte length down the socket channel
             while (totalRead < fileSize && (bytesRead = in.read(buffer, 0, (int) Math.min(buffer.length, fileSize - totalRead))) != -1) {
                 fos.write(buffer, 0, bytesRead);
                 totalRead += bytesRead;
@@ -147,7 +138,7 @@ public class ClientWorker implements Runnable {
                 socket.close();
             }
         } catch (IOException e) {
-            System.err.println("Error closing client socket: " + e.getMessage());
+            System.err.println("Error closing socket: " + e.getMessage());
         }
     }
 }

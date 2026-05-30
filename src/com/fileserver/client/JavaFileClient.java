@@ -1,3 +1,5 @@
+package com.fileserver.client;
+
 import javax.swing.*;
 import java.awt.*;
 import java.io.*;
